@@ -1,0 +1,20 @@
+FROM ubuntu:24.04
+
+# Install required packages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    golang-go \
+    softhsm2 \
+    libsofthsm2 \
+    opensc \
+    libltdl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create default token directory for SoftHSM2
+RUN mkdir -p /var/lib/softhsm/tokens
+
+# Configure SoftHSM2
+RUN echo "directories.tokendir = /var/lib/softhsm/tokens" > /etc/softhsm2.conf
+
+# Set environment variable for SoftHSM2 configuration
+ENV SOFTHSM2_CONF=/etc/softhsm2.conf
