@@ -36,6 +36,8 @@ type Session interface {
 
 	// CreateObject creates an object on the token with the given attributes.
 	CreateObject(template []*pkcs11.Attribute) (Object, error)
+
+	GenerateSecretKey(request GenerateSecretKeyRequest) (*SecretKey, error)
 	// FindObject finds a single object in the token that matches the attributes in
 	// the template. It returns error if there is not exactly one result, or if
 	// there was an error during the find calls.
@@ -192,6 +194,28 @@ func (s *sessionImpl) SetPIN(old, new string) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.ctx.SetPIN(s.handle, old, new)
+}
+
+type GenerateSecretKeyRequest struct {
+	Mechanism     pkcs11.Mechanism
+	KeyAttributes []*pkcs11.Attribute
+}
+
+func (s *sessionImpl) GenerateSecretKey(request GenerateSecretKeyRequest) (*SecretKey, error) {
+	s.Lock()
+	defer s.Unlock()
+	keyHandle, err := s.ctx.GenerateKey(s.handle,
+		[]*pkcs11.Mechanism{&request.Mechanism},
+		request.KeyAttributes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	o := SecretKey(Object{
+		session:      s,
+		objectHandle: keyHandle,
+	})
+	return &o, nil
 }
 
 // KeyPair contains two Objects: one for a public key and one for a private key.

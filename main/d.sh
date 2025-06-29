@@ -28,12 +28,10 @@ xxd -r -p msg.hex msg.bin
 pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6 --login --pin 1234 --decrypt --label pk-rsa-key --mechanism RSA-PKCS -i test_data/msg.bin -o test_data/msg.txt
 
 # generates a self-signed certificate using the new key pair
-pkcs11-tool --module /opt/homebrew/Cellar/softhsm/2.6.1/lib/softhsm/libsofthsm2.so --slot 0x9d57a4f  --label 1234 --login --pin 1234 --sign --type cert --output-file cert.pem
-
-# lists objects again to see the self-signed certificate
+pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6  --label pk-rsa-key --login --pin 1234 --sign --type cert --output-file cert.pem
 
 # exports the public key from the SoftHSM token
-pkcs11-tool --module /opt/homebrew/Cellar/softhsm/2.6.1/lib/softhsm/libsofthsm2.so --slot 0x9d57a4f  --label 1234 --login --pin 1234 --read-object --type pubkey --output-file pubkey.der
+pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6  --label pk-rsa-key --login --pin 1234 --read-object --type pubkey --output-file pubkey.der
 # convert the public key from DER to PEM format
 openssl rsa -pubin -inform DER -in pubkey.der -outform PEM -out pubkey.pem
 
