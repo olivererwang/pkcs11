@@ -16,10 +16,15 @@ package pkcs11
 
 /*
 #cgo windows CFLAGS: -DPACKED_STRUCTURES
-#cgo linux LDFLAGS: -ldl
-#cgo darwin LDFLAGS: -ldl
-#cgo openbsd LDFLAGS:
-#cgo freebsd LDFLAGS: -ldl
+#cgo windows LDFLAGS: -lltdl
+#cgo linux LDFLAGS: -lltdl -ldl
+#cgo darwin CFLAGS: -I/opt/homebrew/opt/libtool/include
+#cgo darwin LDFLAGS: -lltdl -L/opt/homebrew/opt/libtool/lib
+#cgo openbsd CFLAGS: -I/usr/local/include/
+#cgo openbsd LDFLAGS: -lltdl -L/usr/local/lib/
+#cgo freebsd CFLAGS: -I/usr/local/include/
+#cgo freebsd LDFLAGS: -lltdl -L/usr/local/lib/
+#cgo LDFLAGS: -lltdl
 
 #include <stdlib.h>
 #include <stdio.h>
