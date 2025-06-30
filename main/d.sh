@@ -35,3 +35,14 @@ pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6  --label
 # convert the public key from DER to PEM format
 openssl rsa -pubin -inform DER -in pubkey.der -outform PEM -out pubkey.pem
 
+
+# generate a new key pair via openssl
+openssl genrsa -out openssl-rsa-key.pem 2048
+# convert the openssl private key to pkcs8 format
+openssl pkcs8 -topk8 -inform PEM -outform DER -in openssl-rsa-key.pem -out openssl-rsa-key.pk8 -nocrypt
+# import the openssl private key into SoftHSM
+pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6 --login --pin 1234 --write-object openssl-rsa-key.pk8 --type privkey --label openssl-rsa-key
+# convert the openssl private key to public key with pem format
+openssl rsa -in openssl-rsa-key.pem -pubout -outform PEM -out openssl-rsa-key.pub
+# import the openssl public key into SoftHSM
+pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so  --slot 0x7f17d9a6 --login --pin 1234 --write-object openssl-rsa-key.pub --type pubkey --label openssl-rsa-pubkey
