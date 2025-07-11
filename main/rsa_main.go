@@ -86,14 +86,20 @@ func testRSASign(keyPair p11.KeyPair) {
 }
 
 func testRSAEncrypt(keyPair p11.KeyPair) {
-	message := []byte("Hello, RSA PKCS#11!")
-	ciphertext, err := keyPair.Public.Encrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil), message)
+	message := []byte("Hello, RSA PKCS#11!Hello, RSA PKCS#11!")
+	oaepParams := pkcs11.NewOAEPParams(
+		pkcs11.CKM_SHA_1,
+		pkcs11.CKG_MGF1_SHA1,
+		pkcs11.CKZ_DATA_SPECIFIED,
+		nil,
+	)
+	ciphertext, err := keyPair.Public.Encrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, oaepParams), message)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to encrypt message: %v", err))
 	}
 	fmt.Printf("Ciphertext: %x\n", ciphertext)
 
-	plaintext, err := keyPair.Private.Decrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil), ciphertext)
+	plaintext, err := keyPair.Private.Decrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, nil), ciphertext)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to decrypt ciphertext: %v", err))
 	} else {

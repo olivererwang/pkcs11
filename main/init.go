@@ -64,7 +64,7 @@ func GetSession(p p11.Module) (p11.Session, error) {
 		}
 	}
 	// Example: Open a session with the first slot (pseudo-code)
-	session, err := result.OpenWriteSession()
+	session, err := result.OpenSession()
 	if err != nil {
 		panic(err)
 	}

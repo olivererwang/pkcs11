@@ -1,10 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/asn1"
 	"fmt"
 	"github.com/miekg/pkcs11"
 	"github.com/miekg/pkcs11/p11"
+	"math/big"
 )
 
 func findEC(session p11.Session, label string) (*p11.KeyPair, error) {
@@ -91,6 +93,34 @@ func getECPoint(session p11.Session, pub p11.PublicKey) error {
 	return nil
 }
 
+type ecdsaSignature struct {
+	R, S *big.Int
+}
+
+func testECSign(keyPair p11.KeyPair) {
+	message := []byte("Hello, EC PKCS#11!")
+	hash := sha256.Sum256(message)
+	mechanism := pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)
+	signature, err := keyPair.Private.Sign(*mechanism, hash[:])
+	if err != nil {
+		panic(fmt.Sprintf("Failed to sign message: %v", err))
+	}
+	fmt.Printf("Signature (R,S): %x\n", signature)
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	der, err := asn1.Marshal(ecdsaSignature{R: r, S: s})
+	if err != nil {
+		panic(fmt.Sprintf("ASN.1 encoding failed: %v", err))
+	}
+	fmt.Printf("Signature (DER): %x\n", der)
+	// Verify the signature
+	err = keyPair.Public.Verify(*mechanism, hash[:], signature)
+	if err != nil {
+		panic(fmt.Sprintf("Signature verification failed: %v", err))
+	}
+	fmt.Println("Signature verified successfully.")
+}
+
 func main() {
 	p, err := Initialize()
 	if err != nil {
@@ -108,4 +138,6 @@ func main() {
 	}
 	fmt.Println("Found EC Key Pair:", keyPair)
 	fmt.Println(getECPoint(session, keyPair.Public))
+	testECSign(*keyPair)
+
 }
