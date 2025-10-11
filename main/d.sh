@@ -1,5 +1,5 @@
 # This script sets up a Docker container with SoftHSM and PKCS#11 tools for cryptographic operations.
-docker run -d -v ./:/app pkcs11-base tail -f /dev/null
+docker run -d --name=pkcs11test -v ./:/app pkcs11-base tail -f /dev/null
 
 
 ## /opt/homebrew/var/lib/softhsm/tokens 存储位置
