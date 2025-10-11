@@ -35,6 +35,7 @@ func savePEMPublicKey(session p11.Session, pemData []byte, label string) (*p11.P
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
+		pkcs11.NewAttribute(pkcs11.CKA_WRAP, true),
 		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, exponent),
 		pkcs11.NewAttribute(pkcs11.CKA_MODULUS, modulus),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
