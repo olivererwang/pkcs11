@@ -1,11 +1,7 @@
 package main
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"math/big"
 
 	"github.com/miekg/pkcs11"
 	"github.com/miekg/pkcs11/p11"
@@ -32,6 +28,19 @@ func findRSAKey(session p11.Session) (*p11.KeyPair, error) {
 		Private: p11.PrivateKey(pri),
 		Public:  p11.PublicKey(pub),
 	}, nil
+}
+
+func findRSAPublicKey(session p11.Session, lable string) (*p11.PublicKey, error) {
+	fmt.Printf("Finding RSA Public Key: %s\n", lable)
+	pub, err := session.FindObject([]*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, lable),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find public key objects: %v", err)
+	}
+	p := p11.PublicKey(pub)
+	return &p, nil
 }
 
 func genRSA(session p11.Session) (*p11.KeyPair, error) {
@@ -111,36 +120,21 @@ func testRSAEncrypt(keyPair p11.KeyPair) {
 		fmt.Println("Decrypted plaintext:", string(plaintext))
 	}
 }
-
-func getPEMPublicKey(keyPair p11.KeyPair) (string, error) {
-	mod, err := p11.Object(keyPair.Public).Attribute(pkcs11.CKA_MODULUS)
+func testImportRSAEncrypt(pubkey p11.PublicKey) {
+	message := []byte("Hello, RSA PKCS#12")
+	oaepParams := pkcs11.NewOAEPParams(
+		//pkcs11.CKM_SHA_1,
+		//pkcs11.CKG_MGF1_SHA1,
+		pkcs11.CKM_SHA256,
+		pkcs11.CKG_MGF1_SHA256,
+		pkcs11.CKZ_DATA_SPECIFIED,
+		nil,
+	)
+	ciphertext, err := pubkey.Encrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, oaepParams), message)
 	if err != nil {
-		return "", fmt.Errorf("failed to get public key value: %v", err)
+		panic(fmt.Sprintf("Failed to encrypt message: %v", err))
 	}
-
-	exp, err := p11.Object(keyPair.Public).Attribute(pkcs11.CKA_PUBLIC_EXPONENT)
-	if err != nil {
-		return "", fmt.Errorf("failed to get public exponent: %v", err)
-	}
-
-	modb := new(big.Int).SetBytes(mod)
-	expb := new(big.Int).SetBytes(exp)
-
-	rsaPub := rsa.PublicKey{
-		N: modb,
-		E: int(expb.Int64()), // 注意：必须是 int 类型
-	}
-
-	//derBytes := x509.MarshalPKCS1PublicKey(&rsaPub)
-	derBytes, err := x509.MarshalPKIXPublicKey(&rsaPub)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal public key: %v", err)
-	}
-	block := &pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: derBytes,
-	}
-	return string(pem.EncodeToMemory(block)), nil
+	fmt.Printf("Ciphertext: %x\n", ciphertext)
 }
 
 func main() {
@@ -163,9 +157,10 @@ func main() {
 	fmt.Println("RSA key pair generated successfully.")
 	testRSASign(*keyPair)
 	testRSAEncrypt(*keyPair)
-	pubKeyPEM, err := getPEMPublicKey(*keyPair)
+	pubkey, err := findRSAPublicKey(session, "imported-rsa-key")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to get PEM public key: %v", err))
+		panic(fmt.Sprintf("Failed to find imported RSA public key: %v", err))
 	}
-	fmt.Println("PEM Public Key:\n", pubKeyPEM)
+	fmt.Println("Imported Public Key:", pubkey)
+	testImportRSAEncrypt(*pubkey)
 }
