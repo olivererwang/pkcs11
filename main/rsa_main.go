@@ -5,9 +5,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"math/big"
+
 	"github.com/miekg/pkcs11"
 	"github.com/miekg/pkcs11/p11"
-	"math/big"
 )
 
 var tokenLabel = "pk-rsa-key" // Replace with your desired token label
@@ -44,6 +45,7 @@ func genRSA(session p11.Session) (*p11.KeyPair, error) {
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
 		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, 2048),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, tokenLabel),
@@ -53,6 +55,7 @@ func genRSA(session p11.Session) (*p11.KeyPair, error) {
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, tokenLabel),
 		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),

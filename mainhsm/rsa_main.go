@@ -45,6 +45,7 @@ func genRSA(session p11.Session) (*p11.KeyPair, error) {
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
 		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, 2048),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, tokenLabel),
@@ -54,6 +55,7 @@ func genRSA(session p11.Session) (*p11.KeyPair, error) {
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, tokenLabel),
 		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),
@@ -89,8 +91,10 @@ func testRSASign(keyPair p11.KeyPair) {
 func testRSAEncrypt(keyPair p11.KeyPair) {
 	message := []byte("Hello, RSA PKCS#11!Hello, RSA PKCS#11!")
 	oaepParams := pkcs11.NewOAEPParams(
-		pkcs11.CKM_SHA_1,
-		pkcs11.CKG_MGF1_SHA1,
+		//pkcs11.CKM_SHA_1,
+		//pkcs11.CKG_MGF1_SHA1,
+		pkcs11.CKM_SHA256,
+		pkcs11.CKG_MGF1_SHA256,
 		pkcs11.CKZ_DATA_SPECIFIED,
 		nil,
 	)
@@ -100,7 +104,7 @@ func testRSAEncrypt(keyPair p11.KeyPair) {
 	}
 	fmt.Printf("Ciphertext: %x\n", ciphertext)
 
-	plaintext, err := keyPair.Private.Decrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, nil), ciphertext)
+	plaintext, err := keyPair.Private.Decrypt(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, oaepParams), ciphertext)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to decrypt ciphertext: %v", err))
 	} else {
