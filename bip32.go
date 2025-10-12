@@ -104,6 +104,11 @@ import "C"
 
 // CKK_BIP32 should be assigned to the CKA_KEY_TYPE attribute of templates for derived keys
 const CKK_BIP32 = CKK_VENDOR_DEFINED + 0x14
+const CKA_BIP32_VERSION_BYTES = CKA_VENDOR_DEFINED | 0x1101
+const CKG_BIP32_VERSION_MAINNET_PUB = 0x0488B21E
+const CKG_BIP32_VERSION_MAINNET_PRIV = 0x0488ADE4
+const CKG_BIP32_VERSION_TESTNET_PUB = 0x043587CF
+const CKG_BIP32_VERSION_TESTNET_PRIV = 0x04358394
 
 func (c *Ctx) DeriveBIP32MasterKeys(sh SessionHandle, basekey ObjectHandle, publicAttr []*Attribute, privateAttr []*Attribute) (ObjectHandle, ObjectHandle, error) {
 	var publicKey C.CK_OBJECT_HANDLE

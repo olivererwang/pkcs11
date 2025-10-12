@@ -1,0 +1,233 @@
+package main
+
+import (
+	"encoding/asn1"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+
+	"github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11/p11"
+)
+
+func FindMasterKey(session p11.Session, label string) (*p11.PrivateKey, error) {
+	// Find the master key object in the specified slot
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_BIP32),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+	}
+
+	object, err := session.FindObject(template)
+	if err != nil {
+		if errors.Is(err, p11.ErrNoObjectsFound) {
+			log.Printf("Master key with label '%s' not found in the session.", label)
+			return nil, nil // Return nil if the master key is not found
+		}
+		return nil, fmt.Errorf("FindMasterKey: %v", err)
+	}
+	p := p11.PrivateKey(object)
+	return &p, nil
+}
+
+func genGenericKey(session p11.Session, label string, length int) (*p11.SecretKey, error) {
+	// Define the template for the key
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_WRAP, false),
+		pkcs11.NewAttribute(pkcs11.CKA_UNWRAP, false),
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, length),
+		//pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+	}
+
+	// Generate the key
+	secretKey, err := session.GenerateSecretKey(
+		p11.GenerateSecretKeyRequest{
+			Mechanism:     *pkcs11.NewMechanism(pkcs11.CKM_GENERIC_SECRET_KEY_GEN, nil),
+			KeyAttributes: template,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("genGenericKey: %v", err)
+	}
+	return secretKey, nil
+}
+
+func GetExtendECPoint(pub p11.PublicKey) ([]byte, error) {
+	ecPoint, err := p11.Object(pub).Attribute(pkcs11.CKA_EC_POINT)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CKA_EC_POINT: %w", err)
+	}
+	var ecPointBytes []byte
+	_, err = asn1.Unmarshal(ecPoint, &ecPointBytes)
+	if err != nil {
+		return nil, fmt.Errorf("ASN.1 decoding failed: %w", err)
+	}
+	return ecPoint, nil
+}
+
+func GenMasterKey(session p11.Session, label string) (*p11.PrivateKey, error) {
+	// Check if the master key already exists
+	key, err := FindMasterKey(session, label)
+	if err != nil {
+		return nil, fmt.Errorf("GenMasterKey: failed to find master key: %v", err)
+	}
+	if key != nil {
+		//log.Printf("Master key with label '%s' already exists.", label)
+		return key, nil // Return the existing master key if found
+	}
+
+	seed, err := genGenericKey(session, label+"_seed", 16)
+	if err != nil {
+		return nil, fmt.Errorf("GenMasterKey: failed to generate random seed: %v", err)
+	}
+
+	// Generate the master key
+	masterKey, err := session.GenerateBIP32MasterKeyPair(*seed, label)
+	if err != nil {
+		return nil, fmt.Errorf("GenMasterKey: %v", err)
+	}
+	return masterKey, nil
+}
+
+func DeriveChildKey(session p11.Session, masterKey *p11.PrivateKey, path []uint32) (*p11.KeyPair, error) {
+	if masterKey == nil {
+		return nil, fmt.Errorf("DeriveChildKey: master key is nil")
+	}
+	// Derive the child key using the master key and the parsed path
+	childKey, err := session.DeriveChildKeyPair(*masterKey, path)
+	if err != nil {
+		return nil, fmt.Errorf("DeriveChildKey: %v", err)
+	}
+	return childKey, nil
+}
+
+func parsePath(path string) []uint32 {
+	path = strings.Replace(path, "m/", "", 1)
+	split := strings.Split(path, "/")
+	pathUints := make([]uint32, len(split))
+	for i, index := range split {
+		var x uint32
+		if index[len(index)-1] == '\'' {
+			x = 0x80000000
+			index = strings.TrimRight(index, "'")
+		}
+		x1, _ := strconv.ParseUint(index, 10, 32)
+		x += uint32(x1)
+		pathUints[i] = x
+	}
+	return pathUints
+}
+
+func injectSeed(session p11.Session, seed []byte) (*p11.SecretKey, error) {
+	aesTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_AES),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
+		pkcs11.NewAttribute(pkcs11.CKA_UNWRAP, true),
+		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, 32),
+	}
+	wrappingKey, err := session.GenerateSecretKey(
+		p11.GenerateSecretKeyRequest{
+			Mechanism:     *pkcs11.NewMechanism(pkcs11.CKM_AES_KEY_GEN, nil),
+			KeyAttributes: aesTemplate,
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	mech := pkcs11.NewMechanism(pkcs11.CKM_AES_CBC, []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+	encrypted, err := wrappingKey.Encrypt(*mech, seed)
+
+	if err != nil {
+		return nil, err
+	}
+
+	seedTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, len(seed)),
+	}
+	k, err := session.UnwrapKey(mech, p11.Object(*wrappingKey), encrypted, seedTemplate)
+	if err != nil {
+		return nil, err
+	}
+	r := p11.SecretKey(*k)
+	return &r, nil
+}
+
+func testInject(session p11.Session) {
+	v := []string{"000102030405060708090a0b0c0d0e0f", "m/0'/1/2'", "0357bfe1e341d01c69fe5654309956cbea516822fba8a601743a012a7896ee8dc2"}
+	path := parsePath(v[1])
+	seed, _ := hex.DecodeString(v[0])
+	seedKey, err := injectSeed(session, seed)
+	if err != nil {
+		log.Fatalf("injectSeed error: %v", err)
+	}
+	//seedKey, err := genGenericKey(session, "test_inject_seed", 16) // 生成一个随机key，避免覆盖
+	//if err != nil {
+	//	log.Fatalf("genGenericKey error: %v", err)
+	//}
+	masterKey, err := session.GenerateBIP32MasterKeyPair(*seedKey, "test_inject")
+	if err != nil {
+		log.Fatalf("GenerateBIP32MasterKeyPair error: %v", err)
+	}
+	childKey, err := DeriveChildKey(session, masterKey, path)
+	if err != nil {
+		log.Fatalf("DeriveChildKey error: %v", err)
+	}
+	ecPoint, err := GetExtendECPoint(p11.PublicKey(childKey.Public))
+	if err != nil {
+		log.Fatalf("GetExtendECPoint error: %v", err)
+	}
+	fmt.Printf("ecPoint: %x\n", ecPoint)
+	fmt.Println(" pubkey:", v[2])
+}
+
+func testDervieChild(session p11.Session) {
+	masterKey, err := FindMasterKey(session, "client_deposit")
+	if err != nil {
+		log.Fatalf("FindMasterKey error: %v", err)
+	}
+	if masterKey == nil {
+		log.Fatalf("masterKey is nil")
+	}
+	path := parsePath("m/0'/1/2'")
+	childKey, err := DeriveChildKey(session, masterKey, path)
+	if err != nil {
+		log.Fatalf("DeriveChildKey error: %v", err)
+	}
+	ecPoint, err := GetExtendECPoint(p11.PublicKey(childKey.Public))
+	if err != nil {
+		log.Fatalf("GetExtendECPoint error: %v", err)
+	}
+	fmt.Printf("ecPoint: %x\n", ecPoint)
+}
+
+func main() {
+	p, err := Initialize()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize PKCS#11 module: %v", err))
+	}
+	session, err := GetSession(p)
+	if err != nil {
+		defer p.Destroy()
+		panic(fmt.Sprintf("Failed to get session: %v", err))
+	}
+	defer finalize(p, session)
+	testDervieChild(session)
+}
