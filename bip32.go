@@ -99,8 +99,29 @@ CK_RV DeriveBIP32Child(struct ctx * c, CK_SESSION_HANDLE session,
   return e;
 }
 
+#define CKG_BIP32_MAX_SERIALIZED_LEN 112
+
+CK_RV ExportBIP32ExtendKey(struct ctx * c, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key, CK_CHAR_PTR encodedKeyPtr, CK_ULONG_PTR ulSize)
+{
+  CK_BYTE encodedKey[CKG_BIP32_MAX_SERIALIZED_LEN+1] = {0};
+  CK_ULONG ulEncodedKeySize = sizeof(encodedKey);
+  printf("ulEncodedKeySize = %lu\n", ulEncodedKeySize);
+  CK_RV e = c->sym->CA_Bip32ExportPubKey(session, key, encodedKey, &ulEncodedKeySize);
+	printf("encodedKey: ");
+	for (CK_ULONG i = 0; i < ulEncodedKeySize; i++) {
+		printf("%02X", encodedKey[i]);
+	}
+	printf("\n");
+  printf("ulEncodedKeySize = %lu\n", ulEncodedKeySize);
+  if (e != 0) {
+    return e;
+  }
+  //memcpy(encodedKeyPtr, encodedKey, ulEncodedKeySize);
+  return e;
+}
 */
 import "C"
+import "unsafe"
 
 // CKK_BIP32 should be assigned to the CKA_KEY_TYPE attribute of templates for derived keys
 const CKK_BIP32 = CKK_VENDOR_DEFINED + 0x14
@@ -135,4 +156,20 @@ func (c *Ctx) DeriveBIP32ChildKeys(sh SessionHandle, basekey ObjectHandle, publi
 	}
 	e := C.DeriveBIP32Child(c.ctx, C.CK_SESSION_HANDLE(sh), C.CK_OBJECT_HANDLE(basekey), publicAttrC, publicAttrLen, privateAttrC, privateAttrLen, &cPath[0], C.CK_ULONG(len(path)), &publicKey, &privateKey, &pathErrorIndex)
 	return ObjectHandle(publicKey), ObjectHandle(privateKey), uint(pathErrorIndex), toError(e)
+}
+
+func (c *Ctx) ExportBIP32PubKey(sh SessionHandle, key ObjectHandle) ([]byte, error) {
+	buf := make([]byte, C.CKG_BIP32_MAX_SERIALIZED_LEN+1)
+	var ulSize C.CK_ULONG
+	rv := C.ExportBIP32ExtendKey(
+		c.ctx,
+		C.CK_SESSION_HANDLE(sh),
+		C.CK_OBJECT_HANDLE(key),
+		(*C.CK_BYTE)(unsafe.Pointer(&buf[0])),
+		&ulSize,
+	)
+	if rv != C.CKR_OK {
+		return nil, toError(rv)
+	}
+	return buf[:ulSize], nil
 }

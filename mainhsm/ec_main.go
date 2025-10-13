@@ -201,6 +201,7 @@ func getECPoint(session p11.Session, pub p11.PublicKey) error {
 		panic(fmt.Sprintf("ASN.1 解包失败: %v", err))
 	}
 	fmt.Printf("EC Point (裸): %x\n", ecPointBytes)
+	fmt.Println(GetCompressPubkey(ecPointBytes))
 	return nil
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/miekg/pkcs11/p11"
 )
 
@@ -87,4 +88,20 @@ func finalize(p p11.Module, session p11.Session) {
 	session.Logout()
 	session.Close()
 	p.Destroy()
+}
+
+func GetCompressPubkey(pubkey []byte) ([]byte, error) {
+	publicKey, err := btcec.ParsePubKey(pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+	return publicKey.SerializeCompressed(), nil
+}
+
+func GetUncompressPubkey(pubkey []byte) ([]byte, error) {
+	publicKey, err := btcec.ParsePubKey(pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+	return publicKey.SerializeUncompressed(), nil
 }

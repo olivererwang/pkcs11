@@ -108,3 +108,13 @@ func (pub PublicKey) Encrypt(mechanism pkcs11.Mechanism, plaintext []byte) ([]by
 	}
 	return out, nil
 }
+func (pub PublicKey) ExportBIP32PubKey() ([]byte, error) {
+	s := pub.session
+	s.Lock()
+	defer s.Unlock()
+	value, err := s.ctx.ExportBIP32PubKey(s.handle, pub.objectHandle)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
