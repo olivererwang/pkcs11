@@ -123,6 +123,22 @@ CK_RV ExportBIP32ExtendKey(struct ctx * c, CK_SESSION_HANDLE session, CK_OBJECT_
 import "C"
 import "unsafe"
 
+func (c *Ctx) ExportBIP32PubKey(sh SessionHandle, key ObjectHandle) ([]byte, error) {
+	buf := make([]byte, C.CKG_BIP32_MAX_SERIALIZED_LEN+1)
+	var ulSize C.CK_ULONG
+	rv := C.ExportBIP32ExtendKey(
+		c.ctx,
+		C.CK_SESSION_HANDLE(sh),
+		C.CK_OBJECT_HANDLE(key),
+		(*C.CK_BYTE)(unsafe.Pointer(&buf[0])),
+		&ulSize,
+	)
+	if rv != C.CKR_OK {
+		return nil, toError(rv)
+	}
+	return buf[:ulSize], nil
+}
+
 // CKK_BIP32 should be assigned to the CKA_KEY_TYPE attribute of templates for derived keys
 const CKK_BIP32 = CKK_VENDOR_DEFINED + 0x14
 const CKA_BIP32_VERSION_BYTES = CKA_VENDOR_DEFINED | 0x1101
@@ -156,20 +172,4 @@ func (c *Ctx) DeriveBIP32ChildKeys(sh SessionHandle, basekey ObjectHandle, publi
 	}
 	e := C.DeriveBIP32Child(c.ctx, C.CK_SESSION_HANDLE(sh), C.CK_OBJECT_HANDLE(basekey), publicAttrC, publicAttrLen, privateAttrC, privateAttrLen, &cPath[0], C.CK_ULONG(len(path)), &publicKey, &privateKey, &pathErrorIndex)
 	return ObjectHandle(publicKey), ObjectHandle(privateKey), uint(pathErrorIndex), toError(e)
-}
-
-func (c *Ctx) ExportBIP32PubKey(sh SessionHandle, key ObjectHandle) ([]byte, error) {
-	buf := make([]byte, C.CKG_BIP32_MAX_SERIALIZED_LEN+1)
-	var ulSize C.CK_ULONG
-	rv := C.ExportBIP32ExtendKey(
-		c.ctx,
-		C.CK_SESSION_HANDLE(sh),
-		C.CK_OBJECT_HANDLE(key),
-		(*C.CK_BYTE)(unsafe.Pointer(&buf[0])),
-		&ulSize,
-	)
-	if rv != C.CKR_OK {
-		return nil, toError(rv)
-	}
-	return buf[:ulSize], nil
 }

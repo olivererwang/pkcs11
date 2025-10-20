@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strconv"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/miekg/pkcs11/p11"
@@ -9,7 +12,7 @@ import (
 
 var lib = "/usr/safenet/lunaclient/lib/libCryptoki2_64.so"
 var slotID uint = 0
-var pin = "password"
+var userPin = "password"
 
 func Initialize() (p11.Module, error) {
 	// This is the main entry point for the RSA PKCS#11 implementation.
@@ -19,6 +22,18 @@ func Initialize() (p11.Module, error) {
 	// For demonstration purposes, we will just print a message.
 	println("RSA PKCS#11 implementation started.")
 
+	slotidStr, exist := os.LookupEnv("LUNA_SLOT_NUMBER")
+	if exist {
+		n, err := strconv.Atoi(slotidStr)
+		if err != nil {
+			log.Fatalf("invalid LUNA_SLOT_NUMBER env: %v", err)
+		}
+		slotID = uint(n)
+	}
+	pin, exist := os.LookupEnv("LUNA_USER_PIN")
+	if exist {
+		userPin = pin
+	}
 	// Here you would typically load the PKCS#11 library, create a session,
 	// and perform operations like key generation, signing, and verification.
 
@@ -78,7 +93,7 @@ func GetSession(p p11.Module) (p11.Session, error) {
 	// Here you would typically perform RSA operations like key generation,
 	// signing, and verification using the session object.
 	println("RSA PKCS#11 implementation completed successfully.")
-	if err := session.Login(pin); err != nil {
+	if err := session.Login(userPin); err != nil {
 		panic(fmt.Sprintf("Failed to login: %v", err))
 	}
 	return session, nil

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/miekg/pkcs11"
@@ -83,13 +84,14 @@ func genRSA(session p11.Session) (*p11.KeyPair, error) {
 }
 func testRSASign(keyPair p11.KeyPair) {
 	message := []byte("Hello, RSA PKCS#11!")
-	sig, err := keyPair.Private.Sign(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil), message)
+	rawMessage := sha256.Sum256(message)
+	sig, err := keyPair.Private.Sign(*pkcs11.NewMechanism(pkcs11.CKM_SHA256_RSA_PKCS, nil), rawMessage[:])
 	if err != nil {
 		panic(fmt.Sprintf("Failed to sign message: %v", err))
 	}
 	fmt.Println("Signature:", sig)
 
-	err = keyPair.Public.Verify(*pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil), message, sig)
+	err = keyPair.Public.Verify(*pkcs11.NewMechanism(pkcs11.CKM_SHA256_RSA_PKCS, nil), rawMessage[:], sig)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to verify signature: %v", err))
 	} else {

@@ -13,20 +13,20 @@ import (
 	"github.com/pkg/errors"
 )
 
-func FindMasterKey(session p11.Session, label string) (*p11.KeyPair, error) {
-	pubtemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-	}
-	pub, err := session.FindObject(pubtemplate)
-	if err != nil {
-		if errors.Is(err, p11.ErrNoObjectsFound) {
-			log.Printf("Master key(pub) with label '%s' not found in the session.", label)
-			return nil, nil
-		}
-		return nil, errors.Wrap(err, "failed to find EC public key")
-	}
+func FindMasterKey(session p11.Session, label string) (*p11.PrivateKey, error) {
+	//pubtemplate := []*pkcs11.Attribute{
+	//	pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+	//	pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+	//	pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+	//}
+	//pub, err := session.FindObject(pubtemplate)
+	//if err != nil {
+	//	if errors.Is(err, p11.ErrNoObjectsFound) {
+	//		log.Printf("Master key(pub) with label '%s' not found in the session.", label)
+	//		return nil, nil
+	//	}
+	//	return nil, errors.Wrap(err, "failed to find EC public key")
+	//}
 	// Find the master key object in the specified slot
 	pritemplate := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
@@ -42,11 +42,12 @@ func FindMasterKey(session p11.Session, label string) (*p11.KeyPair, error) {
 		}
 		return nil, fmt.Errorf("FindMasterKey: %v", err)
 	}
-	//return &p, nil
-	return &p11.KeyPair{
-		Public:  p11.PublicKey(pub),
-		Private: p11.PrivateKey(object),
-	}, nil
+	p := p11.PrivateKey(object)
+	return &p, nil
+	//return &p11.KeyPair{
+	//	Public:  p11.PublicKey(pub),
+	//	Private: p11.PrivateKey(object),
+	//}, nil
 }
 
 func genGenericKey(session p11.Session, label string, length int) (*p11.SecretKey, error) {
@@ -90,7 +91,7 @@ func GetExtendECPoint(pub p11.PublicKey) ([]byte, error) {
 	return ecPointBytes, nil
 }
 
-func GenMasterKey(session p11.Session, label string) (*p11.KeyPair, error) {
+func GenMasterKey(session p11.Session, label string) (*p11.PrivateKey, error) {
 	// Check if the master key already exists
 	key, err := FindMasterKey(session, label)
 	if err != nil {
@@ -205,10 +206,9 @@ func testInject(session p11.Session) {
 	if err != nil {
 		log.Fatalf("GenerateBIP32MasterKeyPair error: %v", err)
 	}
-	fmt.Printf("childKey: %v\n", masterKey)
-	mecPoint, err := GetExtendECPoint(p11.PublicKey(masterKey.Public))
-	fmt.Printf("mecPoint: %x\n", mecPoint)
-	childKey, err := DeriveChildKey(session, &masterKey.Private, path)
+	fmt.Printf("masterKey: %v\n", masterKey)
+
+	childKey, err := DeriveChildKey(session, masterKey, path)
 	if err != nil {
 		log.Fatalf("DeriveChildKey error: %v", err)
 	}
@@ -229,7 +229,7 @@ func testInject(session p11.Session) {
 }
 
 func testDervieChild(session p11.Session) {
-	masterKey, err := FindMasterKey(session, "client_deposit")
+	masterKey, err := FindMasterKey(session, "test_inject_priv")
 	if err != nil {
 		log.Fatalf("FindMasterKey error: %v", err)
 	}
@@ -237,7 +237,7 @@ func testDervieChild(session p11.Session) {
 		log.Fatalf("masterKey is nil")
 	}
 	path := parsePath("m/0'/1/2'")
-	childKey, err := DeriveChildKey(session, &masterKey.Private, path)
+	childKey, err := DeriveChildKey(session, masterKey, path)
 	if err != nil {
 		log.Fatalf("DeriveChildKey error: %v", err)
 	}
@@ -246,6 +246,8 @@ func testDervieChild(session p11.Session) {
 		log.Fatalf("GetExtendECPoint error: %v", err)
 	}
 	fmt.Printf("ecPoint: %x\n", ecPoint)
+	compressPubkey, _ := GetCompressPubkey(ecPoint)
+	fmt.Printf("pubkey(b): %x\n", compressPubkey)
 }
 
 func main() {
@@ -260,9 +262,10 @@ func main() {
 	}
 	defer finalize(p, session)
 	testInject(session)
-	//master, err := GenMasterKey(session, "test_masterkey")
+	//master, err := GenMasterKey(session, "test_inject_priv")
 	//if err != nil {
 	//	panic(fmt.Sprintf("GenMasterKey error: %v", err))
 	//}
-	//fmt.Printf("master key: %x\n", getBIPECPoint(session, master.Public))
+	//fmt.Printf("masterKey: %x\n", master)
+	//testDervieChild(session)
 }

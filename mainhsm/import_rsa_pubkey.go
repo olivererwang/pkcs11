@@ -4,10 +4,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/miekg/pkcs11"
 	"github.com/miekg/pkcs11/p11"
@@ -80,6 +84,20 @@ func getPEMPublicKey(key p11.PublicKey) (string, error) {
 }
 
 func main() {
+	filename := flag.String("file", "", "PEM公钥文件路径")
+	flag.Parse()
+	if *filename == "" {
+		fmt.Println("请使用 -file 参数指定公钥文件路径")
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(*filename); os.IsNotExist(err) {
+		panic("指定的文件不存在: " + *filename)
+	}
+	if filepath.Ext(*filename) != ".pem" {
+		panic("文件后缀名不是.pem")
+	}
+	baseName := strings.TrimSuffix(filepath.Base(*filename), filepath.Ext(*filename))
 	p, err := Initialize()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize PKCS#11 module: %v", err))
@@ -91,15 +109,14 @@ func main() {
 	}
 	defer finalize(p, session)
 
-	filename := "./public_key.pem"
-	filecontent, err := ioutil.ReadFile(filename)
+	filecontent, err := ioutil.ReadFile(*filename)
 	if err != nil && err != io.EOF {
 		panic(fmt.Sprintf("Failed to read public key file: %v", err))
 	}
 	if len(filecontent) == 0 {
 		panic("Public key file is empty")
 	}
-	pubKey, err := savePEMPublicKey(session, filecontent, "imported-rsa-key")
+	pubKey, err := savePEMPublicKey(session, filecontent, baseName)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to save PEM public key: %v", err))
 	}

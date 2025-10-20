@@ -49,7 +49,7 @@ type Session interface {
 	// public and private keys can't be accidentally switched around.
 	GenerateKeyPair(request GenerateKeyPairRequest) (*KeyPair, error)
 
-	GenerateBIP32MasterKeyPair(seed SecretKey, label string) (*KeyPair, error)
+	GenerateBIP32MasterKeyPair(seed SecretKey, label string) (*PrivateKey, error)
 
 	DeriveChildKeyPair(masterPrivate PrivateKey, path []uint32) (*KeyPair, error)
 
@@ -285,13 +285,13 @@ func (s *sessionImpl) GenerateKeyPair(request GenerateKeyPairRequest) (*KeyPair,
 	}, nil
 }
 
-func (s *sessionImpl) GenerateBIP32MasterKeyPair(seed SecretKey, label string) (*KeyPair, error) {
+func (s *sessionImpl) GenerateBIP32MasterKeyPair(seed SecretKey, label string) (*PrivateKey, error) {
 	s.Lock()
 	defer s.Unlock()
 	seedObj := Object(seed)
 
 	publicTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_BIP32),
 		pkcs11.NewAttribute(pkcs11.CKA_BIP32_VERSION_BYTES, uint(pkcs11.CKG_BIP32_VERSION_MAINNET_PUB)),
 		//pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
@@ -299,9 +299,9 @@ func (s *sessionImpl) GenerateBIP32MasterKeyPair(seed SecretKey, label string) (
 		//pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
 		//pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, false),
 		//pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label+"_pub"),
+		//pkcs11.NewAttribute(pkcs11.CKA_LABEL, label+"_pub"),
 	}
 
 	privateTemplate := []*pkcs11.Attribute{
@@ -313,9 +313,9 @@ func (s *sessionImpl) GenerateBIP32MasterKeyPair(seed SecretKey, label string) (
 		//pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 		//pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, true),
-		//pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label+"_priv"),
+		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
 	}
 
 	//if label != "" {
@@ -324,27 +324,16 @@ func (s *sessionImpl) GenerateBIP32MasterKeyPair(seed SecretKey, label string) (
 	//} else {
 	//	privateTemplate = append(privateTemplate, pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false))
 	//}
-	pubHandle, privHandle, err := s.ctx.DeriveBIP32MasterKeys(s.handle, seedObj.objectHandle,
+	_, privHandle, err := s.ctx.DeriveBIP32MasterKeys(s.handle, seedObj.objectHandle,
 		publicTemplate, privateTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("derive bip32 master key pair: %w", err)
 	}
-	//priv := PrivateKey(Object{
-	//	session:      s,
-	//	objectHandle: privHandle,
-	//})
-	//return &priv, nil
-	return &KeyPair{
-		Public: PublicKey(Object{
-			session:      s,
-			objectHandle: pubHandle,
-		}),
-		Private: PrivateKey(Object{
-			session:      s,
-			objectHandle: privHandle,
-		}),
-	}, nil
-
+	priv := PrivateKey(Object{
+		session:      s,
+		objectHandle: privHandle,
+	})
+	return &priv, nil
 }
 
 func (s *sessionImpl) DeriveChildKeyPair(masterPrivate PrivateKey, path []uint32) (*KeyPair, error) {
@@ -355,7 +344,7 @@ func (s *sessionImpl) DeriveChildKeyPair(masterPrivate PrivateKey, path []uint32
 		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, true),
 		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
-		//pkcs11.NewAttribute(pkcs11.CKA_DERIVE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, false),
 		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, true),
 		//pkcs11.NewAttribute(pkcs11.CKA_LABEL, "cc_pub"),
 	}
@@ -367,7 +356,7 @@ func (s *sessionImpl) DeriveChildKeyPair(masterPrivate PrivateKey, path []uint32
 		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
-		//pkcs11.NewAttribute(pkcs11.CKA_DERIVE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, false),
 		pkcs11.NewAttribute(pkcs11.CKA_MODIFIABLE, false),
 		//pkcs11.NewAttribute(pkcs11.CKA_LABEL, "cc_priv"),
 	}
