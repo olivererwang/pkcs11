@@ -876,7 +876,7 @@ CK_PKCS11_FUNCTION_INFO(C_DeriveKey)
  * The encoded key is stored in encodedKey (BIP32 serialization format)
  * if there were no errors.
  */
-CK_PKCS11_FUNCTION_INFO(CA_Bip32ExportPublicKey)
+CK_PKCS11_FUNCTION_INFO(CA_Bip32ExportPubKey)
 #ifdef CK_NEED_ARG_LIST
 (
   CK_SESSION_HANDLE    hSession,             /* session's handle */

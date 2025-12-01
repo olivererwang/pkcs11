@@ -106,7 +106,7 @@ CK_RV ExportBIP32ExtendKey(struct ctx * c, CK_SESSION_HANDLE session, CK_OBJECT_
   CK_BYTE encodedKey[CKG_BIP32_MAX_SERIALIZED_LEN+1] = {0};
   CK_ULONG ulEncodedKeySize = sizeof(encodedKey);
   printf("ulEncodedKeySize = %lu\n", ulEncodedKeySize);
-  CK_RV e = c->sym->CA_Bip32ExportPublicKey(session, key, encodedKey, &ulEncodedKeySize);
+  CK_RV e = c->sym->CA_Bip32ExportPubKey(session, key, encodedKey, &ulEncodedKeySize);
 	printf("encodedKey: ");
 	for (CK_ULONG i = 0; i < ulEncodedKeySize; i++) {
 		printf("%02X", encodedKey[i]);
